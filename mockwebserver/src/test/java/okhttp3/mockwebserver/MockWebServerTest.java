@@ -16,6 +16,7 @@
 package okhttp3.mockwebserver;
 
 import java.io.BufferedReader;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -26,12 +27,14 @@ import java.net.ProtocolException;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import okhttp3.Headers;
+import okhttp3.HttpUrl;
 import okhttp3.internal.Util;
 import org.junit.After;
 import org.junit.Rule;
@@ -102,6 +105,17 @@ public final class MockWebServerTest {
         .addHeader("Cookies: delicious");
     response.setHeader("cookie", "r=robot");
     assertEquals(Arrays.asList("Cookies: delicious", "cookie: r=robot"), headersToList(response));
+  }
+
+  @Test public void mockResponseSetHeaders() {
+    MockResponse response = new MockResponse()
+        .clearHeaders()
+        .addHeader("Cookie: s=square")
+        .addHeader("Cookies: delicious");
+
+    response.setHeaders(new Headers.Builder().add("Cookie", "a=android").build());
+
+    assertEquals(Arrays.asList("Cookie: a=android"), headersToList(response));
   }
 
   @Test public void regularResponse() throws Exception {
@@ -281,6 +295,9 @@ public final class MockWebServerTest {
 
   @Test public void disconnectRequestHalfway() throws IOException {
     server.enqueue(new MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_DURING_REQUEST_BODY));
+    // Limit the size of the request body that the server holds in memory to an arbitrary
+    // 3.5 MBytes so this test can pass on devices with little memory.
+    server.setBodyLimit(7 * 512 * 1024);
 
     HttpURLConnection connection = (HttpURLConnection) server.url("/").url().openConnection();
     connection.setRequestMethod("POST");
@@ -334,6 +351,11 @@ public final class MockWebServerTest {
   @Test public void shutdownWithoutStart() throws IOException {
     MockWebServer server = new MockWebServer();
     server.shutdown();
+  }
+
+  @Test public void closeViaClosable() throws IOException {
+    Closeable server = new MockWebServer();
+    server.close();
   }
 
   @Test public void shutdownWithoutEnqueue() throws IOException {
@@ -395,5 +417,43 @@ public final class MockWebServerTest {
 
     // Shutting down the server should unblock the dispatcher.
     server.shutdown();
+  }
+
+  @Test public void requestUrlReconstructed() throws Exception {
+    server.enqueue(new MockResponse().setBody("hello world"));
+
+    URL url = server.url("/a/deep/path?key=foo%20bar").url();
+    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+    InputStream in = connection.getInputStream();
+    BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+    assertEquals(HttpURLConnection.HTTP_OK, connection.getResponseCode());
+    assertEquals("hello world", reader.readLine());
+
+    RecordedRequest request = server.takeRequest();
+    assertEquals("GET /a/deep/path?key=foo%20bar HTTP/1.1", request.getRequestLine());
+
+    HttpUrl requestUrl = request.getRequestUrl();
+    assertEquals("http", requestUrl.scheme());
+    assertEquals(server.getHostName(), requestUrl.host());
+    assertEquals(server.getPort(), requestUrl.port());
+    assertEquals("/a/deep/path", requestUrl.encodedPath());
+    assertEquals("foo bar", requestUrl.queryParameter("key"));
+  }
+
+  @Test public void http100Continue() throws Exception {
+    server.enqueue(new MockResponse().setBody("response"));
+
+    URL url = server.url("/").url();
+    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+    connection.setDoOutput(true);
+    connection.setRequestProperty("Expect", "100-Continue");
+    connection.getOutputStream().write("request".getBytes(StandardCharsets.UTF_8));
+
+    InputStream in = connection.getInputStream();
+    BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+    assertEquals("response", reader.readLine());
+
+    RecordedRequest request = server.takeRequest();
+    assertEquals("request", request.getBody().readUtf8());
   }
 }

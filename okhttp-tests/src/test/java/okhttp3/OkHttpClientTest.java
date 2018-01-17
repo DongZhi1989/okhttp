@@ -42,11 +42,12 @@ public final class OkHttpClientTest {
     ResponseCache.setDefault(DEFAULT_RESPONSE_CACHE);
   }
 
-  @Test public void timeoutDefaults() {
+  @Test public void durationDefaults() {
     OkHttpClient client = defaultClient();
     assertEquals(10_000, client.connectTimeoutMillis());
     assertEquals(10_000, client.readTimeoutMillis());
     assertEquals(10_000, client.writeTimeoutMillis());
+    assertEquals(0, client.pingIntervalMillis());
   }
 
   @Test public void timeoutValidRange() {
@@ -118,6 +119,54 @@ public final class OkHttpClientTest {
       builder.protocols(Arrays.asList(Protocol.HTTP_1_0, Protocol.HTTP_1_1));
       fail();
     } catch (IllegalArgumentException expected) {
+    }
+  }
+
+  @Test public void certificatePinnerEquality() {
+    OkHttpClient clientA = TestUtil.defaultClient();
+    OkHttpClient clientB = TestUtil.defaultClient();
+    assertEquals(clientA.certificatePinner(), clientB.certificatePinner());
+  }
+
+  @Test public void nullInterceptor() {
+    OkHttpClient.Builder builder = new OkHttpClient.Builder();
+    try {
+      builder.addInterceptor(null);
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertEquals("interceptor == null", expected.getMessage());
+    }
+  }
+
+  @Test public void nullNetworkInterceptor() {
+    OkHttpClient.Builder builder = new OkHttpClient.Builder();
+    try {
+      builder.addNetworkInterceptor(null);
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertEquals("interceptor == null", expected.getMessage());
+    }
+  }
+
+  @Test public void nullInterceptorInList() {
+    OkHttpClient.Builder builder = new OkHttpClient.Builder();
+    builder.interceptors().add(null);
+    try {
+      builder.build();
+      fail();
+    } catch (IllegalStateException expected) {
+      assertEquals("Null interceptor: [null]", expected.getMessage());
+    }
+  }
+
+  @Test public void nullNetworkInterceptorInList() {
+    OkHttpClient.Builder builder = new OkHttpClient.Builder();
+    builder.networkInterceptors().add(null);
+    try {
+      builder.build();
+      fail();
+    } catch (IllegalStateException expected) {
+      assertEquals("Null network interceptor: [null]", expected.getMessage());
     }
   }
 }

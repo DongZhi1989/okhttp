@@ -60,7 +60,7 @@ public final class SslClient {
       // Generate a self-signed cert for the server to serve and the client to trust.
       HeldCertificate heldCertificate = new HeldCertificate.Builder()
           .serialNumber("1")
-          .commonName(InetAddress.getByName("localhost").getHostName())
+          .commonName(InetAddress.getByName("localhost").getCanonicalHostName())
           .build();
 
       localhost = new Builder()
@@ -78,21 +78,22 @@ public final class SslClient {
     private final List<X509Certificate> chainCertificates = new ArrayList<>();
     private final List<X509Certificate> certificates = new ArrayList<>();
     private KeyPair keyPair;
+    private String keyStoreType = KeyStore.getDefaultType();
 
     /**
      * Configure the certificate chain to use when serving HTTPS responses. The first certificate is
      * the server's certificate, further certificates are included in the handshake so the client
      * can build a trusted path to a CA certificate.
      */
-    public Builder certificateChain(HeldCertificate serverCert, HeldCertificate... chain) {
+    public Builder certificateChain(HeldCertificate localCert, HeldCertificate... chain) {
       X509Certificate[] certificates = new X509Certificate[chain.length];
       for (int i = 0; i < chain.length; i++) {
         certificates[i] = chain[i].certificate;
       }
-      return certificateChain(serverCert.keyPair, serverCert.certificate, certificates);
+      return certificateChain(localCert.keyPair, localCert.certificate, certificates);
     }
 
-    public SslClient.Builder certificateChain(KeyPair keyPair, X509Certificate keyCert,
+    public Builder certificateChain(KeyPair keyPair, X509Certificate keyCert,
         X509Certificate... certificates) {
       this.keyPair = keyPair;
       this.chainCertificates.add(keyCert);
@@ -107,6 +108,11 @@ public final class SslClient {
      */
     public Builder addTrustedCertificate(X509Certificate certificate) {
       this.certificates.add(certificate);
+      return this;
+    }
+
+    public Builder keyStoreType(String keyStoreType) {
+      this.keyStoreType = keyStoreType;
       return this;
     }
 
@@ -151,7 +157,7 @@ public final class SslClient {
 
     private KeyStore newEmptyKeyStore(char[] password) throws GeneralSecurityException {
       try {
-        KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        KeyStore keyStore = KeyStore.getInstance(keyStoreType);
         InputStream in = null; // By convention, 'null' creates an empty key store.
         keyStore.load(in, password);
         return keyStore;

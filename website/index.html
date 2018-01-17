@@ -69,7 +69,7 @@
 
             <h3 id="examples">Examples</h3>
             <h4>Get a URL</h4>
-            <p>This program downloads a URL and print its contents as a string. <a href="https://raw.github.com/square/okhttp/master/samples/guide/src/main/java/okhttp3/guide/GetExample.java">Full source</a>.
+            <p>This program downloads a URL and prints its contents as a string. <a href="https://raw.github.com/square/okhttp/master/samples/guide/src/main/java/okhttp3/guide/GetExample.java">Full source</a>.
 <pre class="prettyprint">
 OkHttpClient client = new OkHttpClient();
 
@@ -78,8 +78,9 @@ String run(String url) throws IOException {
       .url(url)
       .build();
 
-  Response response = client.newCall(request).execute();
-  return response.body().string();
+  try (Response response = client.newCall(request).execute()) {
+    return response.body().string();
+  }
 }
 </pre>
             <h4>Post to a Server</h4>
@@ -97,8 +98,9 @@ String post(String url, String json) throws IOException {
       .url(url)
       .post(body)
       .build();
-  Response response = client.newCall(request).execute();
-  return response.body().string();
+  try (Response response = client.newCall(request).execute()) {
+    return response.body().string();
+  }
 }
 </pre>
 

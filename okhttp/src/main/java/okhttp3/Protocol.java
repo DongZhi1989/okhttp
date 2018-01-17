@@ -35,8 +35,8 @@ public enum Protocol {
   /**
    * A plaintext framing that includes persistent connections.
    *
-   * <p>This version of OkHttp implements <a href="http://www.ietf.org/rfc/rfc2616.txt">RFC
-   * 2616</a>, and tracks revisions to that spec.
+   * <p>This version of OkHttp implements <a href="https://tools.ietf.org/html/rfc7230">RFC
+   * 7230</a>, and tracks revisions to that spec.
    */
   HTTP_1_1("http/1.1"),
 
@@ -44,9 +44,9 @@ public enum Protocol {
    * Chromium's binary-framed protocol that includes header compression, multiplexing multiple
    * requests on the same socket, and server-push. HTTP/1.1 semantics are layered on SPDY/3.
    *
-   * <p>This version of OkHttp implements SPDY 3 <a
-   * href="http://dev.chromium.org/spdy/spdy-protocol/spdy-protocol-draft3-1">draft 3.1</a>. Future
-   * releases of OkHttp may use this identifier for a newer draft of the SPDY spec.
+   * <p>Current versions of OkHttp do not support this protocol.
+   *
+   * @deprecated OkHttp has dropped support for SPDY. Prefer {@link #HTTP_2}.
    */
   SPDY_3("spdy/3.1"),
 
@@ -59,7 +59,17 @@ public enum Protocol {
    * that enforce this may send an exception message including the string {@code
    * INADEQUATE_SECURITY}.
    */
-  HTTP_2("h2");
+  HTTP_2("h2"),
+
+  /**
+   * QUIC (Quick UDP Internet Connection) is a new multiplexed and secure transport atop UDP,
+   * designed from the ground up and optimized for HTTP/2 semantics.
+   * HTTP/1.1 semantics are layered on HTTP/2.
+   *
+   * <p>QUIC is not natively supported by OkHttp, but provided to allow a theoretical
+   * interceptor that provides support.
+   */
+  QUIC("quic");
 
   private final String protocol;
 
@@ -78,12 +88,15 @@ public enum Protocol {
     if (protocol.equals(HTTP_1_1.protocol)) return HTTP_1_1;
     if (protocol.equals(HTTP_2.protocol)) return HTTP_2;
     if (protocol.equals(SPDY_3.protocol)) return SPDY_3;
+    if (protocol.equals(QUIC.protocol)) return QUIC;
     throw new IOException("Unexpected protocol: " + protocol);
   }
 
   /**
    * Returns the string used to identify this protocol for ALPN, like "http/1.1", "spdy/3.1" or
    * "h2".
+   *
+   * @link https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
    */
   @Override public String toString() {
     return protocol;

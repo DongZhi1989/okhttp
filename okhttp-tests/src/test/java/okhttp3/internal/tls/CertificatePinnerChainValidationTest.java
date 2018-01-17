@@ -29,6 +29,8 @@ import okhttp3.mockwebserver.SocketPolicy;
 import org.junit.Rule;
 import org.junit.Test;
 
+import static okhttp3.TestUtil.defaultClient;
+import static okhttp3.internal.platform.PlatformTest.getPlatform;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -60,7 +62,7 @@ public final class CertificatePinnerChainValidationTest {
     SslClient sslClient = new SslClient.Builder()
         .addTrustedCertificate(rootCa.certificate)
         .build();
-    OkHttpClient client = new OkHttpClient.Builder()
+    OkHttpClient client = defaultClient().newBuilder()
         .sslSocketFactory(sslClient.socketFactory, sslClient.trustManager)
         .hostnameVerifier(new RecordingHostnameVerifier())
         .certificatePinner(certificatePinner)
@@ -116,7 +118,7 @@ public final class CertificatePinnerChainValidationTest {
     SslClient contextBuilder = new SslClient.Builder()
         .addTrustedCertificate(rootCa.certificate)
         .build();
-    OkHttpClient client = new OkHttpClient.Builder()
+    OkHttpClient client = defaultClient().newBuilder()
         .sslSocketFactory(contextBuilder.socketFactory, contextBuilder.trustManager)
         .hostnameVerifier(new RecordingHostnameVerifier())
         .certificatePinner(certificatePinner)
@@ -136,6 +138,10 @@ public final class CertificatePinnerChainValidationTest {
         .build());
     Response response1 = call1.execute();
     assertEquals("abc", response1.body().string());
+    response1.close();
+
+    // Force a fresh connection for the next request.
+    client.connectionPool().evictAll();
 
     // Confirm that a second request also succeeds. This should detect caching problems.
     server.enqueue(new MockResponse()
@@ -146,6 +152,7 @@ public final class CertificatePinnerChainValidationTest {
         .build());
     Response response2 = call2.execute();
     assertEquals("def", response2.body().string());
+    response2.close();
   }
 
   @Test public void unrelatedPinnedLeafCertificateInChain() throws Exception {
@@ -176,7 +183,7 @@ public final class CertificatePinnerChainValidationTest {
     SslClient clientContextBuilder = new SslClient.Builder()
         .addTrustedCertificate(rootCa.certificate)
         .build();
-    OkHttpClient client = new OkHttpClient.Builder()
+    OkHttpClient client = defaultClient().newBuilder()
         .sslSocketFactory(clientContextBuilder.socketFactory, clientContextBuilder.trustManager)
         .hostnameVerifier(new RecordingHostnameVerifier())
         .certificatePinner(certificatePinner)
@@ -197,8 +204,20 @@ public final class CertificatePinnerChainValidationTest {
         .issuedBy(compromisedIntermediateCa)
         .commonName(server.getHostName())
         .build();
-    SslClient serverSslContext = new SslClient.Builder()
-        .certificateChain(rogueCertificate.keyPair, rogueCertificate.certificate, compromisedIntermediateCa.certificate, goodCertificate.certificate, rootCa.certificate)
+
+    SslClient.Builder sslBuilder = new SslClient.Builder();
+
+    // Test setup fails on JDK9
+    // java.security.KeyStoreException: Certificate chain is not valid
+    // at sun.security.pkcs12.PKCS12KeyStore.setKeyEntry
+    // http://openjdk.java.net/jeps/229
+    // http://hg.openjdk.java.net/jdk9/jdk9/jdk/file/2c1c21d11e58/src/share/classes/sun/security/pkcs12/PKCS12KeyStore.java#l596
+    if (getPlatform().equals("jdk9")) {
+      sslBuilder.keyStoreType("JKS");
+    }
+
+    SslClient serverSslContext = sslBuilder.certificateChain(
+        rogueCertificate.keyPair, rogueCertificate.certificate, compromisedIntermediateCa.certificate, goodCertificate.certificate, rootCa.certificate)
         .build();
     server.useHttps(serverSslContext.socketFactory, false);
     server.enqueue(new MockResponse()
@@ -250,7 +269,7 @@ public final class CertificatePinnerChainValidationTest {
         .addTrustedCertificate(rootCa.certificate)
         .addTrustedCertificate(compromisedRootCa.certificate)
         .build();
-    OkHttpClient client = new OkHttpClient.Builder()
+    OkHttpClient client = defaultClient().newBuilder()
         .sslSocketFactory(clientContextBuilder.socketFactory, clientContextBuilder.trustManager)
         .hostnameVerifier(new RecordingHostnameVerifier())
         .certificatePinner(certificatePinner)
@@ -271,8 +290,19 @@ public final class CertificatePinnerChainValidationTest {
         .issuedBy(compromisedIntermediateCa)
         .commonName(server.getHostName())
         .build();
-    SslClient serverSslContext = new SslClient.Builder()
-        .certificateChain(
+
+    SslClient.Builder sslBuilder = new SslClient.Builder();
+
+    // Test setup fails on JDK9
+    // java.security.KeyStoreException: Certificate chain is not valid
+    // at sun.security.pkcs12.PKCS12KeyStore.setKeyEntry
+    // http://openjdk.java.net/jeps/229
+    // http://hg.openjdk.java.net/jdk9/jdk9/jdk/file/2c1c21d11e58/src/share/classes/sun/security/pkcs12/PKCS12KeyStore.java#l596
+    if (getPlatform().equals("jdk9")) {
+      sslBuilder.keyStoreType("JKS");
+    }
+
+    SslClient serverSslContext = sslBuilder.certificateChain(
             rogueCertificate.keyPair, rogueCertificate.certificate, goodIntermediateCa.certificate, compromisedIntermediateCa.certificate, compromisedRootCa.certificate)
         .build();
     server.useHttps(serverSslContext.socketFactory, false);
